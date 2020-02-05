@@ -19,6 +19,8 @@
 #include "tournamentsettingswidget.h"
 #include "ui_tournamentsettingswidget.h"
 #include <QSettings>
+#include "gamemanager.h"
+#include "roundrobintournament.h"
 
 TournamentSettingsWidget::TournamentSettingsWidget(QWidget *parent)
 	: QWidget(parent),
@@ -34,6 +36,21 @@ TournamentSettingsWidget::TournamentSettingsWidget(QWidget *parent)
 	connect(ui->m_gauntletRadio, &QRadioButton::toggled, [=](bool checked)
 	{
 		ui->m_seedsSpin->setEnabled(checked);
+	});
+
+	GameManager gameManager;
+	RoundRobinTournament tournament(&gameManager);
+	const QMap<QString, QString> map = tournament.namedResultFormats();
+	for (const QString& value: map)
+		ui->m_resultFormatCombo->addItem(map.key(value), value);
+	ui->m_resultFormatCombo->setCurrentIndex(-1);
+
+	connect(ui->m_resultFormatCombo,
+		static_cast<void(QComboBox::*)(const QString &)>(&QComboBox::currentIndexChanged),
+		this, [=](const QString&)
+	{
+		const QVariant value = ui->m_resultFormatCombo->currentData();
+		ui->m_resultFormatEdit->setText(value.toString());
 	});
 
 	readSettings();
@@ -94,6 +111,11 @@ bool TournamentSettingsWidget::savingOfUnfinishedGames() const
 	return ui->m_saveUnfinishedGamesCheck->isChecked();
 }
 
+QString TournamentSettingsWidget::resultFormat() const
+{
+	return ui->m_resultFormatEdit->text();
+}
+
 void TournamentSettingsWidget::readSettings()
 {
 	QSettings s;
@@ -118,6 +140,19 @@ void TournamentSettingsWidget::readSettings()
 	ui->m_recoverCheck->setChecked(s.value("recover").toBool());
 	ui->m_saveUnfinishedGamesCheck->setChecked(
 		s.value("save_unfinished_games", true).toBool());
+
+	QString format = s.value("result_format").toString();
+	if (format.isEmpty())
+	{
+		int defaultIdx = ui->m_resultFormatCombo->findText("default");
+		ui->m_resultFormatCombo->setCurrentIndex(defaultIdx);
+	}
+	else
+	{
+		ui->m_resultFormatCombo->addItem("setting", QVariant(format));
+		int index = ui->m_resultFormatCombo->findData(format);
+		ui->m_resultFormatCombo->setCurrentIndex(index);
+	}
 
 	s.endGroup();
 }
@@ -177,5 +212,10 @@ void TournamentSettingsWidget::enableSettingsUpdates()
 	connect(ui->m_saveUnfinishedGamesCheck, &QCheckBox::toggled, [=](bool checked)
 	{
 		QSettings().setValue("tournament/save_unfinished_games", checked);
+	});
+
+	connect(ui->m_resultFormatEdit, &QLineEdit::textChanged, [=](const QString &text)
+	{
+		QSettings().setValue("tournament/result_format", text);
 	});
 }
